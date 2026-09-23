@@ -135,5 +135,44 @@ class PushBuilderTests(unittest.TestCase):
         self.assertEqual(out["subtitle"], "permission.asked")
 
 
+class PushBuilderFromPartsTests(unittest.TestCase):
+    """from_parts: assemble a PushPayload from display fields (the
+    Stopgate timer path — no raw payload available at fire time)."""
+
+    def test_assembles_payload_with_icon_and_action(self):
+        push = PushBuilder.from_parts("claude", "🎉 Claude Code 工作完成", "done", "Stop")
+        self.assertEqual(push["title"], "🎉 Claude Code 工作完成")
+        self.assertEqual(push["markdown"], "done")
+        self.assertEqual(push["subtitle"], "Stop")
+        self.assertEqual(push["icon"], CLAUDE_ICON_URL)
+        self.assertEqual(push["action"], "none")
+
+    def test_no_subtitle_when_absent(self):
+        push = PushBuilder.from_parts("codex", "T", "M")
+        self.assertNotIn("subtitle", push)
+
+    def test_unknown_source_gets_default_icon(self):
+        push = PushBuilder.from_parts("mystery", "T", "M")
+        self.assertEqual(push["icon"], OPENAI_ICON_URL)
+
+    def test_truncates_long_message(self):
+        push = PushBuilder.from_parts("codex", "T", "x" * 600)
+        self.assertLessEqual(len(push["markdown"]), 500)
+        self.assertTrue(push["markdown"].endswith("..."))
+
+    def test_build_truncates_long_message(self):
+        out = PushBuilder.build({"message": "y" * 600}, "codex")
+        self.assertLessEqual(len(out["markdown"]), 500)
+        self.assertTrue(out["markdown"].endswith("..."))
+
+
+class PushBuilderTitleForTests(unittest.TestCase):
+    def test_known_source(self):
+        self.assertEqual(PushBuilder.title_for("claude"), "Claude Code")
+
+    def test_unknown_source_falls_back(self):
+        self.assertEqual(PushBuilder.title_for("nope"), "Codex")
+
+
 if __name__ == "__main__":
     unittest.main()

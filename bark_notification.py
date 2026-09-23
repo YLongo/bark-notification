@@ -302,7 +302,7 @@ class PushBuilder:
         )
         title = payload.get("title") or cls._TITLE_BY_SOURCE.get(source, "Codex")
         icon_url = cls._ICON_BY_SOURCE.get(source, OPENAI_ICON_URL)
-        message = cls._resolve_message(payload, event_type)
+        message = cls._truncate(cls._resolve_message(payload, event_type))
 
         out = {
             "title": title,
@@ -313,6 +313,39 @@ class PushBuilder:
         if event_type:
             out["subtitle"] = event_type
         return out
+
+    @classmethod
+    def title_for(cls, source: str) -> str:
+        """Display title for an AgentSource ("claude" → "Claude Code")."""
+        return cls._TITLE_BY_SOURCE.get(source, "Codex")
+
+    @classmethod
+    def from_parts(cls, agent_source: str, title: str, message: str, subtitle: str = None) -> dict:
+        """Assemble a PushPayload from precomputed display fields.
+
+        The dual of build(): for callers (the Stopgate timer subprocess)
+        that no longer hold the raw payload, only the display fields
+        captured at schedule time. Icon and action knowledge lives in
+        PushBuilder — here and in build(), nowhere else.
+        """
+        out = {
+            "title": title,
+            "markdown": cls._truncate(message),
+            "icon": cls._ICON_BY_SOURCE.get(agent_source, OPENAI_ICON_URL),
+            "action": "none",
+        }
+        if subtitle:
+            out["subtitle"] = subtitle
+        return out
+
+    _MAX_MESSAGE = 500
+
+    @classmethod
+    def _truncate(cls, message: str) -> str:
+        """Single choke point for the display-length cap on markdown."""
+        if len(message) > cls._MAX_MESSAGE:
+            return message[: cls._MAX_MESSAGE - 3] + "..."
+        return message
 
     @staticmethod
     def _resolve_message(payload: dict, event_type):
@@ -541,8 +574,9 @@ class Stopgate:
         """
         delay = delay if delay is not None else cls._GATE_SECONDS
         token = f"{time.time()}-{os.getpid()}"
-        if len(message) > 500:
-            message = message[:497] + "..."
+        # NOTE: no display truncation here — the message flows into the
+        # state file untrimmed and is capped once, at emit time, by
+        # PushBuilder.from_parts (single choke point).
         transcript_size = cls._transcript_size(transcript_path)
         state = {
             "token": token,
@@ -710,35 +744,39 @@ def _log_notify(msg: str) -> None:
         pass
 
 
-def _send_notification(title: str, message: str, subtitle: str = None, agent_source: str = "codex") -> None:
-    """Actually fire Bark + macOS notification. Called by Stopgate timer.
+def _emit_push(push: dict, channel=None, notifier=None) -> None:
+    """Single emit seam: deliver one PushPayload over both channels.
 
-    `agent_source` ("claude"/"reasonix"/"opencode"/"codex") selects the
-    icon. The title already carries the agent name — it's constructed
-    by main() using PushBuilder._TITLE_BY_SOURCE.
+    Absorbs the whole transport assembly — config load, cipher, form
+    encoding, the Bark POST, the macOS notification — so no caller
+    assembles this chain by hand. `channel` / `notifier` are injectable
+    for tests (same style as BarkCipher's encrypt_fn and BarkChannel's
+    opener).
     """
-    if len(message) > 500:
-        message = message[:497] + "..."
-    _log_notify(f"send_notification: agent={agent_source} title={title!r} msg_len={len(message)}")
-    push_payload = {
-        "title": title,
-        "markdown": message,
-        "icon": PushBuilder._ICON_BY_SOURCE.get(agent_source, OPENAI_ICON_URL),
-        "action": "none",
-    }
-    if subtitle:
-        push_payload["subtitle"] = subtitle
     config = _load_config()
     cipher = BarkCipher.from_config(
-        key=config.encryption_key, iv=config.encryption_iv, payload=push_payload
+        key=config.encryption_key, iv=config.encryption_iv, payload=push
     )
     try:
         form = cipher.body()
     except Exception as e:
         _log_notify(f"cipher.body() FAILED: {type(e).__name__}: {e}")
         return
-    BarkChannel(url=config.bark_url).send(form)
-    MacOSNotifier().notify(title, subtitle, message)
+    (channel or BarkChannel(url=config.bark_url)).send(form)
+    (notifier or MacOSNotifier()).notify(
+        push.get("title", ""), push.get("subtitle"), push.get("markdown", "")
+    )
+
+
+def _send_notification(title: str, message: str, subtitle: str = None, agent_source: str = "codex") -> None:
+    """Fire Bark + macOS notification. Called by the Stopgate timer.
+
+    Thin assembly: turn the display fields captured at schedule time
+    into a PushPayload, then hand it to the emit seam. Tests stub this
+    function to observe Stopgate fires — keep the signature stable.
+    """
+    _log_notify(f"send_notification: agent={agent_source} title={title!r} msg_len={len(message)}")
+    _emit_push(PushBuilder.from_parts(agent_source, title, message, subtitle))
 
 
 def main() -> None:
@@ -766,7 +804,7 @@ def main() -> None:
     # lastAssistantText) identify it, but they'd be masked once we
     # copy them into Claude Code's snake_case equivalents below.
     agent_source = SourceDetector.detect(payload)
-    agent_title = PushBuilder._TITLE_BY_SOURCE.get(agent_source, "Agent")
+    agent_title = PushBuilder.title_for(agent_source)
     # Field normalization: reasonix's native hook payload uses camelCase
     # keys (event/sessionId/lastAssistantText) while Claude Code uses
     # snake_case (hook_event_name/session_id/last_assistant_message).
@@ -835,21 +873,7 @@ def main() -> None:
         f"title={push_payload.get('title')!r} "
         f"msg_len={len(push_payload.get('markdown', ''))}"
     )
-    config = _load_config()
-    cipher = BarkCipher.from_config(
-        key=config.encryption_key, iv=config.encryption_iv, payload=push_payload
-    )
-    try:
-        form = cipher.body()
-    except Exception as e:
-        _log_notify(f"direct_notify cipher.body() FAILED: {type(e).__name__}: {e}")
-        return
-    BarkChannel(url=config.bark_url).send(form)
-    MacOSNotifier().notify(
-        push_payload.get("title", agent_title),
-        push_payload.get("subtitle"),
-        push_payload.get("markdown", ""),
-    )
+    _emit_push(push_payload)
 
 
 if __name__ == "__main__":
