@@ -136,21 +136,25 @@ ZCode 的 hook 协议与 Claude 兼容，无需额外适配——脚本会自动
 
 #### Pi
 
-Pi 采用扩展方式。安装扩展到 `~/.pi/agent/extensions/bark-notify-pi.ts`：
+Pi 采用扩展方式。一行安装到 `~/.pi/agent/extensions/`：
 
 ```bash
-# 下载扩展
-curl -fsSL https://raw.githubusercontent.com/suply/bark-notification/reasonix/bark-notify-pi.ts \
+curl -fsSL https://raw.githubusercontent.com/YLongo/bark-notification/main/bark-notify-pi.ts \
   -o ~/.pi/agent/extensions/bark-notify-pi.ts
 ```
 
-然后编辑 `~/.pi/agent/extensions/bark-notify-pi.ts`，把 `BARK_SCRIPT` 指向你本地的 `bark_notification.py`：
+然后编辑该文件，把 `BARK_SCRIPT` 指向你本地的 `bark_notification.py`（文件顶部标了必改）：
 
 ```typescript
 const BARK_SCRIPT = "/path/to/bark_notification.py";
 ```
 
 重启 pi 或输入 `/reload` 生效。
+
+说明：
+
+- 通知内容：🍕 标题带会话名/项目名，副标题带项目与耗时，正文为最后一条 assistant 回复（自动压平空白并截断）。
+- 环境变量由 pi 进程继承：从终端启动 pi 时，shell 里的 `BARK_BASE` 等配置自动生效，扩展无需额外配置。
 
 #### OpenCode
 
