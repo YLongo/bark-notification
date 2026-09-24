@@ -328,6 +328,10 @@ python3 -m unittest discover -s tests
 
 未启用加密时，通知内容以明文经 HTTPS 传输并经过 Bark 服务器——适合非敏感内容。
 
+## 致谢
+
+本项目基于 [blanboom/bark-notification-for-claude-codex-opencode](https://github.com/blanboom/bark-notification-for-claude-codex-opencode) 重构而来，在此基础上面向六家 AI 编码代理重新设计。
+
 ## 免责声明
 
 本 README、脚本及配置文件由 AI 辅助生成。作者确认其功能完整并正在实际使用中。
