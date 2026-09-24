@@ -134,6 +134,16 @@ ZCode 的 hook 协议与 Claude 兼容，无需额外适配——脚本会自动
 - `PermissionRequest`（可选）在 ZCode 需要你批准权限时推送——手机 SSH 场景很好用。
 - hook 配置在会话启动时快照；改完后**请开启新会话**。若 hook 不触发，查 `~/.zcode/cli/log/zcode-<date>.jsonl` 中的 `hook.run.failed`。
 
+**从 Dock/Spotlight 启动的 ZCode（GUI）继承不到 shell 环境变量**——父进程是 launchd，不读 `~/.zshrc`。此时改用 `command` 类型 hook 内联环境变量：
+
+```json
+{
+  "type": "command",
+  "command": "BARK_BASE=https://api.day.app/YOUR_DEVICE_KEY python3 /path/to/bark_notification.py",
+  "timeoutMs": 15000
+}
+```
+
 #### Reasonix
 
 Reasonix 的 hook 事件与 Claude 同族，且支持在 hook 里注入环境变量——用 `BARK_AGENT_SOURCE` 打上来源标记即可精确识别。
