@@ -7,3 +7,12 @@ __pycache__/
 # macOS
 .DS_Store
 ._*
+
+# local-only agent artifacts (never publish)
+.agents/
+.remember/
+.scratch/
+docs/
+AGENTS.md
+CONTEXT.md
+*.bak*
