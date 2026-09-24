@@ -9,9 +9,9 @@
 
 ## 前置条件
 
-- Python 3.x
+- Python 3.x（明文推送零第三方依赖，标准库即可）
 - iOS 设备上安装 [Bark](https://apps.apple.com/app/id1403753865) App
-- `cryptography` 库：`pip install cryptography`（macOS 也可 `brew install cryptography`）
+- `cryptography` 库——**仅启用加密时需要**：`pip install cryptography`（macOS 也可 `brew install cryptography`）。未安装时脚本正常运行（明文推送）；配置了加密但缺库会警告并回退明文
 
 ## 安装配置
 
