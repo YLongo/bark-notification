@@ -124,8 +124,14 @@ OPENAI_ICON_URL = "https://images.ctfassets.net/j22is2dtoxu1/intercom-img-d177d0
 CLAUDE_ICON_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Claude_AI_symbol.svg/960px-Claude_AI_symbol.svg.png"
 # OpenCode icon
 OPENCODE_ICON_URL = "https://opencode.ai/apple-touch-icon.png"
-# Reasonix logo (PNG from reasonix-desktop repo; Bark iOS doesn't render SVG)
-REASONIX_ICON_URL = "https://raw.githubusercontent.com/suply/reasonix-desktop/master/build/icon.png"
+# Reasonix logo (256px PNG from the canonical DeepSeek-Reasonix repo,
+# pinned to a commit SHA so branch renames can't break it; Bark iOS
+# doesn't render SVG, hence the linux hicolor PNG variant)
+REASONIX_ICON_URL = (
+    "https://raw.githubusercontent.com/esengine/DeepSeek-Reasonix/"
+    "6845b6de3c5e079737a3b010ebcdd87f6cd0228c/"
+    "desktop/build/linux/icons/hicolor/256x256/apps/reasonix-desktop.png"
+)
 # Pi coding agent — PNG Homarr dashboard icon (Bark iOS doesn't support SVG)
 PI_ICON_URL = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/pi-coding-agent.png"
 # ZCode (Z.ai) — official desktop app icon PNG from the open-source repo

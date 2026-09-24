@@ -1,4 +1,4 @@
-# 适用于 [Claude Code](https://code.claude.com/docs/en/overview)/[Codex CLI](https://github.com/openai/codex)/[OpenCode](https://opencode.ai)/[Pi](https://pi.dev)/[ZCode](https://zcode.z.ai)/[Reasonix](https://github.com/suply/reasonix-desktop) 的 Bark 通知
+# 适用于 [Claude Code](https://code.claude.com/docs/en/overview)/[Codex CLI](https://github.com/openai/codex)/[OpenCode](https://opencode.ai)/[Pi](https://pi.dev)/[ZCode](https://zcode.z.ai)/[Reasonix](https://github.com/esengine/DeepSeek-Reasonix) 的 Bark 通知
 
 当你的 AI 编程 agent 完成任务时，通过 [Bark](https://github.com/Finb/Bark) 向 iOS 设备推送通知，同时在 Mac 本地弹出系统通知。
 
