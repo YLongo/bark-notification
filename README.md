@@ -25,23 +25,26 @@
 
 ### 2. 配置脚本
 
-脚本从环境变量读取配置，无需改动源码，仓库中不残留任何个人密钥。
+把配置写进本地配置文件——一次配置，所有 agent 生效（含 GUI 启动的 ZCode）：
 
-把 URL 加进 shell 配置文件（`~/.zshrc` / `~/.bashrc`），所有 agent 的 hook 都会自动继承：
+```bash
+mkdir -p ~/.config/bark-notification
+echo 'BARK_BASE=https://api.day.app/YOUR_DEVICE_KEY' \
+  >> ~/.config/bark-notification/config
+```
+
+文件为 `KEY=VALUE` 纯文本，即时生效：值不要加引号，`#` 注释须在行首。文件里存着设备密钥，建议 `chmod 600` 保护。三个可用变量：
+
+- `BARK_BASE` —— 推送必需项。未设置时脚本跳过 Bark 推送（stderr 给出提示），macOS 本地通知照常弹出。
+- `BARK_ENCRYPTION_KEY` / `BARK_ENCRYPTION_IV` —— 可选，见「可选：启用端到端加密」。
+
+环境变量可临时覆盖文件（CI / 调试 / 单会话换设备）：
 
 ```bash
 export BARK_BASE="https://api.day.app/YOUR_DEVICE_KEY"
 ```
 
-`BARK_BASE` 是推送必需项。未设置时脚本跳过 Bark 推送（stderr 给出提示），macOS 本地通知照常弹出。
-
-`BARK_AGENT_SOURCE`（可选）强制指定通知来源（`claude`/`opencode`/`reasonix`/`pi`/`zcode`/`codex`），优先级高于 payload 识别——适合在 hook 配置里按会话设置。
-
-也可以在单个 hook 里内联设置：
-
-```json
-"command": "BARK_BASE=https://api.day.app/YOUR_DEVICE_KEY python3 /path/to/bark_notification.py"
-```
+`BARK_AGENT_SOURCE`（可选，仅环境变量）强制指定通知来源（`claude`/`opencode`/`reasonix`/`pi`/`zcode`/`codex`），优先级高于 payload 识别——适合在 hook 配置里按会话设置。
 
 ### 3. 配置你的编程 agent
 
@@ -134,15 +137,7 @@ ZCode 的 hook 协议与 Claude 兼容，无需额外适配——脚本会自动
 - `PermissionRequest`（可选）在 ZCode 需要你批准权限时推送——手机 SSH 场景很好用。
 - hook 配置在会话启动时快照；改完后**请开启新会话**。若 hook 不触发，查 `~/.zcode/cli/log/zcode-<date>.jsonl` 中的 `hook.run.failed`。
 
-**从 Dock/Spotlight 启动的 ZCode（GUI）继承不到 shell 环境变量**——父进程是 launchd，不读 `~/.zshrc`。此时改用 `command` 类型 hook 内联环境变量：
-
-```json
-{
-  "type": "command",
-  "command": "BARK_BASE=https://api.day.app/YOUR_DEVICE_KEY python3 /path/to/bark_notification.py",
-  "timeoutMs": 15000
-}
-```
+配置文件对所有启动方式生效——GUI（Dock/Spotlight）启动的 ZCode 无需任何特殊处理。
 
 #### Reasonix
 
@@ -276,11 +271,11 @@ export const NotifyPlugin = async ({ $ }) => ({
 
 **手机侧（Bark App）**：首页 → **推送加密** → **加密设置**，算法选 `AES256`、模式选 `GCM`（padding 自动变为 noPadding），填入 32 位密钥。App 没有 IV 输入框——IV 由脚本侧配置，随每次推送携带。
 
-**电脑侧（`~/.zshrc`）**：
+**电脑侧**——写进配置文件（推荐，见「配置脚本」）：
 
 ```bash
-export BARK_ENCRYPTION_KEY="your-32-character-encryption-key"
-export BARK_ENCRYPTION_IV="your-12char-iv"
+echo 'BARK_ENCRYPTION_KEY=your-32-character-encryption-key' >> ~/.config/bark-notification/config
+echo 'BARK_ENCRYPTION_IV=your-12char-iv' >> ~/.config/bark-notification/config
 ```
 
 两侧的 KEY 必须一致；IV 只存在于脚本侧。长度须为 32 / 12 字节（ASCII 字符下即 32 / 12 个字符）——不对则警告并回退明文，不会静默失败。
@@ -291,7 +286,7 @@ export BARK_ENCRYPTION_IV="your-12char-iv"
 python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("".join(secrets.choice(a) for _ in range(32))); print("".join(secrets.choice(a) for _ in range(12)))'
 ```
 
-第一行是 KEY（填进 App 和环境变量），第二行是 IV（只填环境变量）。配置后重启终端生效。
+第一行是 KEY（填进 App 和配置文件），第二行是 IV（只填配置文件）。配置文件即时生效，无需重启终端。
 
 详细说明参见官方文档：[Bark 推送加密](https://bark.day.app/#/encryption)。
 

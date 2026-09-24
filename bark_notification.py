@@ -13,20 +13,30 @@ import urllib.request
 #   brew install cryptography  /  pip install cryptography
 # Imported lazily inside _encrypt_aes_gcm so the script can run without it.
 
-# Runtime configuration is env-first, so the repo can be public without
-# leaking personal device keys:
+# Runtime configuration comes from a local config file with env
+# overrides, so the repo can be public without leaking personal
+# device keys:
+#   ~/.config/bark-notification/config   KEY=VALUE lines — the single
+#                                        source for all agents, GUI-
+#                                        launched ones (ZCode) included.
 #   BARK_BASE             Bark push URL incl. device key. Unset → Bark
 #                         push is skipped; macOS notification still fires.
-#   BARK_ENCRYPTION_KEY   Optional AES key (32 chars) / IV (12 chars).
+#   BARK_ENCRYPTION_KEY   Optional AES key (32 bytes) / IV (12 bytes).
 #   BARK_ENCRYPTION_IV    Both must be valid to enable encryption; wrong
 #                         length falls back to plaintext + warning.
+# Environment variables override the file (CI / temporary switches).
+
+_CONFIG_FILE = os.path.join(
+    os.path.expanduser("~/.config/bark-notification"), "config"
+)
 
 
 class Config:
     """Resolved runtime configuration.
 
-    `_load_config()` is the only reader of these environment variables;
-    everything downstream receives the values by injection.
+    `_load_config()` is the only reader of the config file and these
+    environment variables; everything downstream receives the values
+    by injection.
     """
 
     __slots__ = ("bark_url", "encryption_key", "encryption_iv")
@@ -37,19 +47,72 @@ class Config:
         self.encryption_iv = encryption_iv
 
 
+def _read_config_file(path: str = None) -> dict:
+    """Read KEY=VALUE lines from the config file.
+
+    Missing file → {} (the normal case for new users). Blank lines and
+    # comments are skipped; malformed lines are skipped with a warning
+    that does NOT echo the line (it may contain a device key). Any
+    read/decode failure keeps the values read so far and degrades
+    loudly on stderr — hooks must never crash on config problems.
+    """
+    path = path or _CONFIG_FILE
+    values = {}
+    try:
+        with open(path, "rb") as f:
+            for lineno, raw in enumerate(f, 1):
+                try:
+                    line = raw.decode("utf-8").strip()
+                except UnicodeDecodeError:
+                    print(
+                        f"[bark-notify] {path}:{lineno}: ignoring "
+                        f"undecodable line ({len(raw)} bytes)",
+                        file=sys.stderr,
+                    )
+                    continue
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    print(
+                        f"[bark-notify] {path}:{lineno}: ignoring malformed "
+                        f"line ({len(line)} chars)",
+                        file=sys.stderr,
+                    )
+                    continue
+                key, _, value = line.partition("=")
+                values[key.strip()] = value.strip()
+    except FileNotFoundError:
+        return values
+    except OSError as e:
+        print(
+            f"[bark-notify] could not read config file {path}: "
+            f"{type(e).__name__}",
+            file=sys.stderr,
+        )
+    return values
+
+
 def _load_config() -> Config:
-    bark_url = os.environ.get("BARK_BASE") or None
+    values = _read_config_file()
+    bark_url = os.environ.get("BARK_BASE") or values.get("BARK_BASE") or None
     if not bark_url:
         print(
             "[bark-notify] BARK_BASE is not set; skipping Bark push "
-            "(the macOS notification still fires). Set it to your Bark "
-            "push URL, e.g. export BARK_BASE=https://api.day.app/YOUR_KEY",
+            "(the macOS notification still fires). Set it in "
+            "~/.config/bark-notification/config or export it, e.g. "
+            "export BARK_BASE=https://api.day.app/YOUR_KEY",
             file=sys.stderr,
         )
     return Config(
         bark_url=bark_url,
-        encryption_key=os.environ.get("BARK_ENCRYPTION_KEY", ""),
-        encryption_iv=os.environ.get("BARK_ENCRYPTION_IV", ""),
+        encryption_key=(
+            os.environ.get("BARK_ENCRYPTION_KEY", "")
+            or values.get("BARK_ENCRYPTION_KEY", "")
+        ),
+        encryption_iv=(
+            os.environ.get("BARK_ENCRYPTION_IV", "")
+            or values.get("BARK_ENCRYPTION_IV", "")
+        ),
     )
 
 OPENAI_ICON_URL = "https://images.ctfassets.net/j22is2dtoxu1/intercom-img-d177d076c9a5453052925143/49d5d812b0a6fcc20a14faa8c629d9fb/icon-ios-1024_401x.png"
