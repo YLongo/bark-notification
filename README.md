@@ -19,7 +19,7 @@
 
 1. 在 iOS 设备上打开 Bark App
 2. 首页找到 **推送加密**，点击 **加密设置**
-3. 选择算法 `AES256GCM`，设置 **32 位密钥** 和 **12 位 IV**
+3. 算法选 `AES256`，模式选 `GCM`（padding 自动变为 noPadding），填入 **32 位密钥**——App 无需填 IV，IV 由脚本侧配置并随每次推送携带
 4. 复制你的 Bark 推送 URL（形如 `https://api.day.app/YOUR_DEVICE_KEY`）
 
 详细说明参见官方文档：[Bark 推送加密](https://bark.day.app/#/encryption)。
