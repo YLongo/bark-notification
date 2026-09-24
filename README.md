@@ -1,10 +1,10 @@
-# 适用于 [Claude Code](https://code.claude.com/docs/en/overview)/[Codex CLI](https://github.com/openai/codex)/[OpenCode](https://opencode.ai)/[Pi](https://pi.dev)/[ZCode](https://zcode.z.ai) 的 Bark 通知
+# 适用于 [Claude Code](https://code.claude.com/docs/en/overview)/[Codex CLI](https://github.com/openai/codex)/[OpenCode](https://opencode.ai)/[Pi](https://pi.dev)/[ZCode](https://zcode.z.ai)/[Reasonix](https://github.com/suply/reasonix-desktop) 的 Bark 通知
 
 当你的 AI 编程 agent 完成任务时，通过 [Bark](https://github.com/Finb/Bark) 向 iOS 设备推送通知，同时在 Mac 本地弹出系统通知。
 
 ## 特性
 
-- **统一脚本**：一个脚本支持 Claude Code、Codex CLI、OpenCode、Pi、ZCode
+- **统一脚本**：一个脚本支持 Claude Code、Codex CLI、OpenCode、Pi、ZCode、Reasonix
 - **自动识别**：根据 payload 结构识别通知来源，自动配上对应的图标和标题
 - **双通道**：Bark iOS 推送 + macOS 本地通知
 - **可选端到端加密**：AES-256-GCM，Apple 和 Bark 服务器都无法读取通知内容
@@ -134,6 +134,45 @@ ZCode 的 hook 协议与 Claude 兼容，无需额外适配——脚本会自动
 - `PermissionRequest`（可选）在 ZCode 需要你批准权限时推送——手机 SSH 场景很好用。
 - hook 配置在会话启动时快照；改完后**请开启新会话**。若 hook 不触发，查 `~/.zcode/cli/log/zcode-<date>.jsonl` 中的 `hook.run.failed`。
 
+#### Reasonix
+
+Reasonix 的 hook 事件与 Claude 同族，且支持在 hook 里注入环境变量——用 `BARK_AGENT_SOURCE` 打上来源标记即可精确识别。
+
+编辑 `~/.reasonix/settings.json`：
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "command": "python3 /path/to/bark_notification.py",
+        "timeout": 10000,
+        "env": { "BARK_AGENT_SOURCE": "reasonix" }
+      }
+    ],
+    "Notification": [
+      {
+        "command": "python3 /path/to/bark_notification.py",
+        "timeout": 10000,
+        "env": { "BARK_AGENT_SOURCE": "reasonix" }
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "command": "python3 /path/to/bark_notification.py",
+        "timeout": 5000,
+        "env": { "BARK_AGENT_SOURCE": "reasonix" }
+      }
+    ]
+  }
+}
+```
+
+说明：
+
+- `UserPromptSubmit` 重置每回合通知状态；`Stop` 有 10 秒防抖（与 ZCode 相同）。
+- 不设 `BARK_AGENT_SOURCE` 也能靠 payload 的 camelCase 字段自动识别。
+
 #### Pi
 
 Pi 采用扩展方式。一行安装到 `~/.pi/agent/extensions/`：
@@ -252,6 +291,7 @@ python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("
 
 - **ZCode**：通过 `ZCODE_SESSION_ID`/`ZCODE_PROJECT_DIR` 环境变量、camelCase 重复字段（`hookEventName`/`transcriptPath`）、`agent_type` 或 `zcode-hook-*` 转录路径识别
 - **Claude Code**：通过 `hook_event_name`、`session_id` 或 `transcript_path` 字段识别
+- **Reasonix**：通过 `BARK_AGENT_SOURCE` 环境变量或 camelCase 字段（`sessionId`/`lastAssistantText`）识别
 - **OpenCode**：通过会话类事件或标题中的 OpenCode 字样识别
 - **Codex CLI**：其余 payload 的默认回退
 
