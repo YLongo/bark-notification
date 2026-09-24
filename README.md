@@ -1,43 +1,43 @@
 # 适用于 [Claude Code](https://code.claude.com/docs/en/overview)/[Codex CLI](https://github.com/openai/codex)/[OpenCode](https://opencode.ai)/[Pi](https://pi.dev)/[ZCode](https://zcode.z.ai) 的 Bark 通知
 
-当你的 AI 编程 agent 完成任务时，通过 [Bark](https://github.com/Finb/Bark) 向你的 iOS 设备推送通知。
+当你的 AI 编程 agent 完成任务时，通过 [Bark](https://github.com/Finb/Bark) 向 iOS 设备推送通知，同时在 Mac 本地弹出系统通知。
 
 ## 特性
 
-- **统一脚本**：一个脚本无缝支持 Claude Code、Codex CLI、OpenCode、Pi、ZCode
-- **可选端到端加密**：采用 AES-256-GCM 加密，Apple 和 Bark 服务器都无法读取你的通知内容
+- **统一脚本**：一个脚本支持 Claude Code、Codex CLI、OpenCode、Pi、ZCode
+- **自动识别**：根据 payload 结构识别通知来源，自动配上对应的图标和标题
+- **双通道**：Bark iOS 推送 + macOS 本地通知
+- **可选端到端加密**：AES-256-GCM，Apple 和 Bark 服务器都无法读取通知内容
 
 ## 前置条件
 
-- Python 3.x（明文推送零第三方依赖，标准库即可）
+- Python 3.10+——明文推送零第三方依赖，标准库即可
 - iOS 设备上安装 [Bark](https://apps.apple.com/app/id1403753865) App
-- `cryptography` 库——**仅启用加密时需要**：`pip install cryptography`（macOS 也可 `brew install cryptography`）。未安装时脚本正常运行（明文推送）；配置了加密但缺库会警告并回退明文
+- `cryptography` 库仅启用加密时需要：`pip install cryptography`（macOS 也可 `brew install cryptography`）
+
+未安装 `cryptography` 时脚本正常运行（明文推送）；配置了加密但缺库，脚本会警告并回退明文，不会静默失败。
 
 ## 安装配置
 
-### 1. 配置 Bark 加密
+### 1. 获取推送 URL
 
-1. 在 iOS 设备上打开 Bark App
-2. 首页找到 **推送加密**，点击 **加密设置**
-3. 算法选 `AES256`，模式选 `GCM`（padding 自动变为 noPadding），填入 **32 位密钥**——App 无需填 IV，IV 由脚本侧配置并随每次推送携带
-4. 复制你的 Bark 推送 URL（形如 `https://api.day.app/YOUR_DEVICE_KEY`）
-
-详细说明参见官方文档：[Bark 推送加密](https://bark.day.app/#/encryption)。
+打开 Bark App，首页即可看到你的推送 URL，形如 `https://api.day.app/YOUR_DEVICE_KEY`——复制留用，下一步要用。
 
 ### 2. 配置脚本
 
-脚本从环境变量读取配置——无需改动源码，仓库中也不会残留任何个人密钥。加到 shell 配置文件（`~/.zshrc` / `~/.bashrc`）中，所有 agent 的 hook 都会自动继承：
+脚本从环境变量读取配置，无需改动源码，仓库中不残留任何个人密钥。
+
+把 URL 加进 shell 配置文件（`~/.zshrc` / `~/.bashrc`），所有 agent 的 hook 都会自动继承：
 
 ```bash
 export BARK_BASE="https://api.day.app/YOUR_DEVICE_KEY"
-export BARK_ENCRYPTION_KEY="your-32-character-encryption-key"   # 可选
-export BARK_ENCRYPTION_IV="your-12char-iv"                       # 可选
 ```
 
-- `BARK_BASE` —— 推送必需。未设置时脚本跳过 Bark 推送（stderr 会给出提示），本地 macOS 通知照常弹出。
-- `BARK_ENCRYPTION_KEY` / `BARK_ENCRYPTION_IV` —— 可选；两者都设置且长度正确（32 / 12 字符）才启用 AES-256-GCM。长度不对则回退为明文并给出警告。
+`BARK_BASE` 是推送必需项。未设置时脚本跳过 Bark 推送（stderr 给出提示），macOS 本地通知照常弹出。
 
-也可以在单个 hook 里内联设置，例如 Claude Code：
+`BARK_AGENT_SOURCE`（可选）强制指定通知来源（`claude`/`opencode`/`reasonix`/`pi`/`zcode`/`codex`），优先级高于 payload 识别——适合在 hook 配置里按会话设置。
+
+也可以在单个 hook 里内联设置：
 
 ```json
 "command": "BARK_BASE=https://api.day.app/YOUR_DEVICE_KEY python3 /path/to/bark_notification.py"
@@ -221,6 +221,31 @@ export const NotifyPlugin = async ({ $ }) => ({
 
 （最小版不过滤子会话，子会话结束也会各推一条。）
 
+## 可选：启用端到端加密
+
+不配置加密也能正常使用（明文推送）。想加密通知内容，两侧各配置一次：
+
+**手机侧（Bark App）**：首页 → **推送加密** → **加密设置**，算法选 `AES256`、模式选 `GCM`（padding 自动变为 noPadding），填入 32 位密钥。App 没有 IV 输入框——IV 由脚本侧配置，随每次推送携带。
+
+**电脑侧（`~/.zshrc`）**：
+
+```bash
+export BARK_ENCRYPTION_KEY="your-32-character-encryption-key"
+export BARK_ENCRYPTION_IV="your-12char-iv"
+```
+
+两侧的 KEY 必须一致；IV 只存在于脚本侧。长度须为 32 / 12 字节（ASCII 字符下即 32 / 12 个字符）——不对则警告并回退明文，不会静默失败。
+
+没有现成密钥？一条命令随机生成：
+
+```bash
+python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("".join(secrets.choice(a) for _ in range(32))); print("".join(secrets.choice(a) for _ in range(12)))'
+```
+
+第一行是 KEY（填进 App 和环境变量），第二行是 IV（只填环境变量）。配置后重启终端生效。
+
+详细说明参见官方文档：[Bark 推送加密](https://bark.day.app/#/encryption)。
+
 ## 工作原理
 
 脚本根据 payload 结构自动识别触发通知的工具：
@@ -230,11 +255,12 @@ export const NotifyPlugin = async ({ $ }) => ({
 - **OpenCode**：通过会话类事件或标题中的 OpenCode 字样识别
 - **Codex CLI**：其余 payload 的默认回退
 
-调用方可以在 payload 中带 `source` 字段（`"claude"`、`"opencode"`、`"zcode"`、`"codex"`）直接跳过识别。上文 OpenCode 插件就是这么做的；Claude Code 和 Codex CLI 也可以在 hook payload 里透传该标签。
+调用方也可以在 payload 中带 `source` 字段（`"claude"`、`"opencode"`、`"reasonix"`、`"pi"`、`"zcode"`、`"codex"`）直接跳过识别。上文 OpenCode 插件就是这么做的。
 
 每条通知包含：
+
 - 工具专属标题和图标
-- 事件类型作为副标题
+- 事件类型作为副标题（无事件类型时省略）
 - 最后一条 assistant 消息或事件摘要作为正文
 
 ## 测试
@@ -249,11 +275,13 @@ python3 -m unittest discover -s tests
 
 ## 安全性
 
-配置了 `BARK_ENCRYPTION_KEY` / `BARK_ENCRYPTION_IV` 时，通知内容在本地用 AES-256-GCM 加密后才发送。加密保证：
+启用加密后，通知内容在本地用 AES-256-GCM 加密后才发出：
 
 - Apple 推送服务无法读取内容
-- Bark 服务器只存储加密数据
-- 只有持有对应密钥的你的设备能解密通知
+- Bark 服务器只存储密文
+- 只有持有密钥的你的设备能解密
+
+未启用加密时，通知内容以明文经 HTTPS 传输并经过 Bark 服务器——适合非敏感内容。
 
 ## 免责声明
 
