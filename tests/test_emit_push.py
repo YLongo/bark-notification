@@ -33,6 +33,14 @@ class EmitPushTests(unittest.TestCase):
         self._saved = {k: os.environ.get(k) for k in _ENV_KEYS}
         for k in _ENV_KEYS:
             os.environ.pop(k, None)
+        # Pin the config file to a nonexistent path: the machine's real
+        # config carries encryption values that would flip the cipher.
+        import bark_notification as mod
+        import tempfile
+        self._orig_file = mod._CONFIG_FILE
+        mod._CONFIG_FILE = os.path.join(
+            tempfile.gettempdir(), "bark-config-absent-test"
+        )
 
     def tearDown(self):
         for k, v in self._saved.items():
@@ -40,6 +48,8 @@ class EmitPushTests(unittest.TestCase):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+        import bark_notification as mod
+        mod._CONFIG_FILE = self._orig_file
 
     @staticmethod
     def _push():

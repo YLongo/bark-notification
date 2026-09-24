@@ -159,6 +159,20 @@ class ConfigFileFallbackTests(unittest.TestCase):
         cfg = _load_config()
         self.assertEqual(cfg.bark_url, "https://api.day.app/k?a=b==c")
 
+    def test_surrounding_quotes_stripped(self):
+        """Values pasted from shell-export habits may carry quotes
+        and stray whitespace — tolerate them instead of silently
+        producing wrong-length keys (the author hit this in 5 min)."""
+        self._write(
+            'BARK_BASE= "https://api.day.app/x" \n'
+            "BARK_ENCRYPTION_KEY='" + "k" * 32 + "'\n"
+            'BARK_ENCRYPTION_IV="' + "i" * 12 + '"\n'
+        )
+        cfg = _load_config()
+        self.assertEqual(cfg.bark_url, "https://api.day.app/x")
+        self.assertEqual(cfg.encryption_key, "k" * 32)
+        self.assertEqual(cfg.encryption_iv, "i" * 12)
+
     def test_non_utf8_file_degrades_not_crashes(self):
         with open(self._file, "wb") as f:
             f.write(b"BARK_BASE=https://api.day.app/x\n\xff\xfe")

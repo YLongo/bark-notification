@@ -80,7 +80,11 @@ def _read_config_file(path: str = None) -> dict:
                     )
                     continue
                 key, _, value = line.partition("=")
-                values[key.strip()] = value.strip()
+                # Tolerate shell-export habits: BARK_BASE="…" or '…'
+                # with stray whitespace — strip rather than silently
+                # producing wrong-length keys.
+                value = value.strip().strip('"').strip("'").strip()
+                values[key.strip()] = value
     except FileNotFoundError:
         return values
     except OSError as e:
